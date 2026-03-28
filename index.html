@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PocketLog - 내 주머니 속 간편한 금융 기록</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Pretendard Font -->
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .item-actions { display: flex; gap: 10px; margin-left: 15px; }
+        .btn-edit, .btn-delete { background: none; border: none; cursor: pointer; font-size: 0.9rem; color: #aaa; transition: color 0.2s; }
+        .btn-edit:hover { color: var(--primary-color); }
+        .btn-delete:hover { color: var(--expense-color); }
+        .item-date { font-size: 0.75rem; color: #bbb; margin-top: 2px; }
+        
+        .list-tabs { display: flex; gap: 15px; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .tab-btn { background: none; border: none; padding: 5px 10px; cursor: pointer; color: #888; font-weight: bold; font-size: 0.9rem; }
+        .tab-btn.active { color: var(--primary-color); border-bottom: 2px solid var(--primary-color); }
+
+        /* Statistics View Section */
+        #statistics-view {
+            display: none;
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: var(--shadow);
+            width: 100%;
+            min-height: 500px;
+        }
+        .chart-container {
+            position: relative;
+            height: 450px;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="logo">PocketLog</div>
+        <nav class="nav-menu">
+            <a href="#" id="nav-dashboard" class="active">대시보드</a>
+            <a href="#" id="nav-statistics">통계/분석</a>
+        </nav>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <button id="theme-toggle" style="background: none; border: none; cursor: pointer; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; padding: 5px; border-radius: 50%; transition: background 0.3s;">
+                <span id="theme-icon">🌙</span>
+            </button>
+            <div class="profile">👤</div>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Dashboard Content (Split Layout) -->
+        <main class="left-panel" id="dashboard-left">
+            <section class="balance-widget">
+                <h2>현재 내 잔액</h2>
+                <h1 class="amount" id="current-balance">₩ 0</h1>
+                <div style="display:flex; justify-content:center; gap:20px; margin-top:10px;">
+                    <p style="color: #888; font-size: 0.9rem;">이번 달 수입: <span id="monthly-income" style="color: var(--income-color); font-weight: bold;">₩ 0</span></p>
+                    <p style="color: #888; font-size: 0.9rem;">이번 달 지출: <span id="monthly-expense" style="color: var(--expense-color); font-weight: bold;">₩ 0</span></p>
+                </div>
+            </section>
+            
+            <section class="transaction-list">
+                <div class="list-header">
+                    <div class="list-tabs">
+                        <button class="tab-btn active" data-filter="all">전체</button>
+                        <button class="tab-btn" data-filter="expense">지출</button>
+                        <button class="tab-btn" data-filter="income">수입</button>
+                    </div>
+                    <input type="text" placeholder="검색어를 입력하세요" class="search-bar" id="search-input">
+                    <div class="filters">
+                        <select id="filter-month">
+                            <option value="all">전체 기간</option>
+                            <option value="2026-03" selected>2026년 3월</option>
+                        </select>
+                        <select id="filter-category">
+                            <option value="all">전체 카테고리</option>
+                        </select>
+                    </div>
+                    <!-- Export/Import Buttons -->
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <button id="btn-export" style="flex: 1; padding: 8px; background: #eee; border: 1px solid #ddd; border-radius: 5px; cursor: pointer; font-size: 0.85rem;">💾 데이터 내보내기 (Export)</button>
+                        <button id="btn-import" style="flex: 1; padding: 8px; background: #eee; border: 1px solid #ddd; border-radius: 5px; cursor: pointer; font-size: 0.85rem;">📂 데이터 불러오기 (Import)</button>
+                        <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
+                    </div>
+                </div>
+                <div class="list-content" id="transaction-items-container"></div>
+            </section>
+        </main>
+
+        <!-- Statistics Content (Full Width) -->
+        <section id="statistics-view">
+            <h2 style="margin-bottom: 30px; text-align: center;">카테고리별 지출 요약</h2>
+            <div class="chart-container">
+                <canvas id="expenseChart"></canvas>
+            </div>
+            <div id="no-data-msg" style="display:none; text-align:center; color:#888; margin-top:50px; font-size: 1.2rem;">
+                표시할 지출 내역이 없습니다. 지출을 먼저 기록해 주세요!
+            </div>
+        </section>
+
+        <!-- Common Input Panel (Dashboard Right) -->
+        <aside class="right-panel" id="input-panel">
+            <h2 id="form-title">빠른 내역 추가</h2>
+            <form id="transaction-form">
+                <input type="hidden" id="edit-id" value="">
+                <input type="text" id="amount-input" placeholder="0" class="input-amount" required>
+                <div class="toggle-type" style="margin-bottom: 15px;">
+                    <button type="button" id="type-expense" class="btn-expense active">지출</button>
+                    <button type="button" id="type-income" class="btn-income">수입</button>
+                </div>
+                <div class="category-grid" id="category-grid-container"></div>
+                <input type="text" id="title-input" placeholder="제목 (예: 스타벅스)" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; outline: none; margin-top: 10px; width: 100%;">
+                <textarea id="memo-input" placeholder="메모를 입력하세요." class="input-memo" style="width: 100%;"></textarea>
+                <button type="submit" id="submit-btn" class="btn-submit">저장하기</button>
+                <button type="button" id="cancel-edit-btn" class="btn-submit" style="background: #999; display: none; margin-top: 5px;">취소</button>
+            </form>
+        </aside>
+    </div>
+
+    <div class="fab" id="mobile-fab">+</div>
+    <script src="script.js"></script>
+</body>
+</html>
